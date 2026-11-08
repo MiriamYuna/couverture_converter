@@ -30,3 +30,14 @@ Based on the work of Ramon Morato, *Chocolate* (book). Adapted and implemented i
 ## Author
 
 Professional pastry chef (25 years), learning Python and AI.
+
+## Web app
+
+`app.py` is a Streamlit app: choose two couvertures, enter the weight, and get the amount of the new couverture needed.
+
+To run it:
+
+    pip install -r requirements.txt
+    streamlit run app.py
+
+The couverture percentages in the app are example values. Replace them with the ones from your own technical sheets.
