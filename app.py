@@ -12,6 +12,7 @@ def new_couverture_weight(weight_a, factor_a, factor_b):
     return weight_a * factor_a / factor_b
 
 st.title("Chocolate Calculator")
+tab_swap, tab_ganache = st.tabs(["Swap couverture", "Ganache"])
 st.header("Swap couverture")
 
 name_a = st.selectbox("Couverture A (original)", list(COUVERTURES))
