@@ -2,7 +2,7 @@ import streamlit as st
 
 # Product database. These are EXAMPLE values: replace with your own technical sheets.
 COUVERTURES = {
-    "Dark 70% (A)": {"cocoa_butter": 42},
+    "Callebaut 70-30-38": {"cocoa_butter": 38.9},
     "Dark 64% (B)": {"cocoa_butter": 38},
     "Milk 38%": {"cocoa_butter": 32},
     "White": {"cocoa_butter": 33},
