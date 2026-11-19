@@ -23,3 +23,7 @@ factor_b = COUVERTURES[name_b]["cocoa_butter"] / 100
 weight_b = new_couverture_weight(weight_a, factor_a, factor_b)
 
 st.metric("Grams of B needed", f"{round(weight_b)} g")
+
+with tab_ganache:
+    st.header("Ganache")
+    st.write("Coming soon.")
