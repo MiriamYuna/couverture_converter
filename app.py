@@ -3,11 +3,13 @@ import streamlit as st
 # Product database. These are EXAMPLE values: replace with your own technical sheets.
 COUVERTURES = {
     "Callebaut 70-30-38": {"cocoa_butter": 38.9},
-    "Dark 64% (B)": {"cocoa_butter": 38},
-    "Milk 38%": {"cocoa_butter": 32},
-    "White": {"cocoa_butter": 33},
+    "Callebaut 811": {"cocoa_butter": 36.6},
+    "Callebaut 823 milk (total fat)": {"cocoa_butter": 36.2},
+    "Callebaut 665 milk (total fat)": {"cocoa_butter": 35.5},
+    "Callebaut Gold (total fat)": {"cocoa_butter": 37.1},
+    "Callebaut Ruby RB2 (total fat)": {"cocoa_butter": 36.8},
+    "White (example)": {"cocoa_butter": 33},
 }
-
 def new_couverture_weight(weight_a, factor_a, factor_b):
     return weight_a * factor_a / factor_b
 
