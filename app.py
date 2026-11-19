@@ -13,17 +13,19 @@ def new_couverture_weight(weight_a, factor_a, factor_b):
 
 st.title("Chocolate Calculator")
 tab_swap, tab_ganache = st.tabs(["Swap couverture", "Ganache"])
-st.header("Swap couverture")
 
-name_a = st.selectbox("Couverture A (original)", list(COUVERTURES))
-name_b = st.selectbox("Couverture B (new)", list(COUVERTURES), index=1)
-weight_a = st.number_input("Grams of A", min_value=0.0, value=890.0, step=10.0)
+with tab_swap:
+    st.header("Swap couverture")
 
-factor_a = COUVERTURES[name_a]["cocoa_butter"] / 100
-factor_b = COUVERTURES[name_b]["cocoa_butter"] / 100
-weight_b = new_couverture_weight(weight_a, factor_a, factor_b)
+    name_a = st.selectbox("Couverture A (original)", list(COUVERTURES))
+    name_b = st.selectbox("Couverture B (new)", list(COUVERTURES), index=1)
+    weight_a = st.number_input("Grams of A", min_value=0.0, value=890.0, step=10.0)
 
-st.metric("Grams of B needed", f"{round(weight_b)} g")
+    factor_a = COUVERTURES[name_a]["cocoa_butter"] / 100
+    factor_b = COUVERTURES[name_b]["cocoa_butter"] / 100
+    weight_b = new_couverture_weight(weight_a, factor_a, factor_b)
+
+    st.metric("Grams of B needed", f"{round(weight_b)} g")
 
 with tab_ganache:
     st.header("Ganache")
