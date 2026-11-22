@@ -57,5 +57,21 @@ with tab_ganache:
             ("Dairy fat", dairy_fat, "max 15%", dairy_fat <= 15),
         ]
         for label, value, limit, ok in checks:
+                    advice = []
+        if water > 20:
+            advice.append("Too much water: use less cream and swap fresh butter for anhydrous butter.")
+        if sugars < 30:
+            advice.append("Not enough sugars: add invert sugar, glucose syrup, dextrose or sorbitol (a mix works best).")
+        if cocoa_butter < 21:
+            advice.append("Not enough cocoa butter: add more couverture or some extra cocoa butter.")
+        if dairy_fat > 15:
+            advice.append("Too much dairy fat: use less cream and butter.")
+
+        if advice:
+            st.subheader("What to change")
+            for line in advice:
+                st.write("• " + line)
+        else:
+            st.success("This recipe is within the book's balance. Measure the Aw to confirm it is below 0.85.")
             icon = "✅" if ok else "❌"
             st.write(f"{icon} **{label}:** {value:.1f}%  ({limit})")
