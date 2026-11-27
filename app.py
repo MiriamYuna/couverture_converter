@@ -15,6 +15,10 @@ COUVERTURES = {
 GANACHE_COUVERTURES = {
     "Callebaut 70-30-38": {"cocoa_butter": 38.9, "sugar": 26.0},
     "Callebaut 811": {"cocoa_butter": 36.6, "sugar": 43.1},
+    # Milk: total fat 36.2 - milk fat 6.0 = 30.2 cocoa butter (sheet 823NV-554).
+    "Callebaut 823 milk": {"cocoa_butter": 30.2, "sugar": 49.9, "milk_fat": 6.0},
+    # White CW2 (the one used in the book): sheet CW2-E4-U71.
+    "Callebaut CW2 white": {"cocoa_butter": 27.5, "sugar": 56.5, "milk_fat": 6.5},
 }
 LIQUIDS = {
     "Cream 35%": {"water": 65.0, "sugar": 0.0, "dairy_fat": 35.0},
@@ -37,7 +41,7 @@ def new_couverture_weight(weight_a, factor_a, factor_b):
     return weight_a * factor_a / factor_b
 
 
-def design_ganache(liquid_g, water, sugar, dairy_fat, couv_cb, couv_sugar, target_cb, target_sugar):
+def design_ganache(liquid_g, water, sugar, dairy_fat, couv_cb, couv_sugar, target_cb, target_sugar, couv_milk_fat=0.0):
     """Ganache with a target % of cocoa butter and of total sugars.
     Returns grams of each ingredient and the resulting percentages, or None."""
     if liquid_g <= 0 or couv_cb <= 0:
@@ -64,7 +68,43 @@ def design_ganache(liquid_g, water, sugar, dairy_fat, couv_cb, couv_sugar, targe
     result["pct_water"] = (liquid_g * water / 100 + added * WATER_PER_GRAM) / total * 100
     result["pct_sugar"] = (liquid_g * sugar / 100 + added * SUGAR_PER_GRAM + couverture * couv_sugar / 100) / total * 100
     result["pct_cocoa_butter"] = couverture * couv_cb / 100 / total * 100
-    result["pct_dairy_fat"] = liquid_g * dairy_fat / 100 / total * 100
+    result["pct_dairy_fat"] = (liquid_g * dairy_fat / 100 + couverture * couv_milk_fat / 100) / total * 100
+    return result
+
+
+def design_ganache_water(liquid_g, water, sugar, dairy_fat, couv_cb, couv_sugar, couv_milk_fat,
+                         target_water, target_sugar, target_cb):
+    """Three targets (water, sugars, cocoa butter): also calculates extra cocoa butter.
+    Returns grams of each ingredient and the resulting percentages, or None."""
+    tw, ts, tcb = target_water / 100, target_sugar / 100, target_cb / 100
+    cc, sc, sl = couv_cb / 100, couv_sugar / 100, sugar / 100
+    w0 = liquid_g * water / 100
+    s0 = liquid_g * sl
+    if sc <= 0:
+        return None
+    # C = a_c*T + b_c ; W = a_w*T + b_w
+    a_w = tw / WATER_PER_GRAM
+    b_w = -w0 / WATER_PER_GRAM
+    a_c = (ts - SUGAR_PER_GRAM * a_w) / sc
+    b_c = (-s0 - SUGAR_PER_GRAM * b_w) / sc
+    denominator = 1 - tcb - a_c * (1 - cc) - a_w
+    if abs(denominator) < 1e-9:
+        return None
+    total = (liquid_g + b_c * (1 - cc) + b_w) / denominator
+    couverture = a_c * total + b_c
+    added = a_w * total + b_w
+    extra_cb = tcb * total - cc * couverture
+    if extra_cb > -0.5:
+        extra_cb = max(extra_cb, 0.0)
+    if total <= 0 or couverture < 0 or added < 0 or extra_cb < 0:
+        return None
+    result = {"couverture": couverture, "total": total, "extra_cb": extra_cb}
+    for name, info in ADDED_SUGARS.items():
+        result[name] = added * info["share"]
+    result["pct_water"] = (w0 + added * WATER_PER_GRAM) / total * 100
+    result["pct_sugar"] = (s0 + added * SUGAR_PER_GRAM + couverture * couv_sugar / 100) / total * 100
+    result["pct_cocoa_butter"] = (couverture * couv_cb / 100 + extra_cb) / total * 100
+    result["pct_dairy_fat"] = (liquid_g * dairy_fat / 100 + couverture * couv_milk_fat / 100) / total * 100
     return result
 
 
@@ -134,25 +174,47 @@ with tab_ganache:
 
 with tab_design:
     st.header("Ganache designer")
-    st.caption("For piped bonbon ganaches with dark couverture. Based on recipe 189 (811 ganache) and Ramon Morato's book.")
+    st.caption("For piped bonbon ganaches (dark, milk or white couverture). Based on recipe 189 (811 ganache) and Ramon Morato's book.")
 
     liquid_name = st.selectbox("Liquid", list(LIQUIDS))
     liquid_g = st.number_input("Grams of liquid", min_value=0.0, value=190.5, step=10.0)
-    couv_name = st.selectbox("Couverture", list(GANACHE_COUVERTURES), index=1, key="design_couverture")
-    target_cb = st.number_input("Target cocoa butter (%)", min_value=5.0, max_value=30.0, value=16.3, step=0.5)
+    couv_name = st.selectbox("Couverture", list(GANACHE_COUVERTURES) + ["Custom couverture"], index=1, key="design_couverture")
+    target_cb = st.number_input("Target cocoa butter (%)", min_value=5.0, max_value=35.0, value=16.3, step=0.5)
     target_sugar = st.number_input("Target total sugars (%)", min_value=20.0, max_value=60.0, value=41.0, step=1.0)
 
-    liquid = LIQUIDS[liquid_name]
-    couv = GANACHE_COUVERTURES[couv_name]
+    use_water = st.checkbox("Also set a water target and add extra cocoa butter (for white chocolate)")
+    target_water = None
+    if use_water:
+        target_water = st.number_input("Target water (%)", min_value=5.0, max_value=30.0, value=15.0, step=0.5)
 
-    result = design_ganache(
-        liquid_g, liquid["water"], liquid["sugar"], liquid["dairy_fat"],
-        couv["cocoa_butter"], couv["sugar"], target_cb, target_sugar,
-    )
+    liquid = LIQUIDS[liquid_name]
+    if couv_name == "Custom couverture":
+        st.caption("Type the values from the technical sheet of your chocolate (per 100 g). For milk and white, milk fat is part of the total fat: total fat = cocoa butter + milk fat.")
+        custom_cb = st.number_input("Cocoa butter (%)", min_value=0.0, max_value=60.0, value=30.0, step=0.5)
+        custom_milk_fat = st.number_input("Milk fat (%) - 0 for dark", min_value=0.0, max_value=20.0, value=0.0, step=0.5)
+        custom_sugar = st.number_input("Sugars (%)", min_value=1.0, max_value=80.0, value=45.0, step=0.5)
+        couv = {"cocoa_butter": custom_cb, "sugar": custom_sugar, "milk_fat": custom_milk_fat}
+    else:
+        couv = GANACHE_COUVERTURES[couv_name]
+
+    if use_water:
+        result = design_ganache_water(
+            liquid_g, liquid["water"], liquid["sugar"], liquid["dairy_fat"],
+            couv["cocoa_butter"], couv["sugar"], couv.get("milk_fat", 0.0),
+            target_water, target_sugar, target_cb,
+        )
+    else:
+        result = design_ganache(
+            liquid_g, liquid["water"], liquid["sugar"], liquid["dairy_fat"],
+            couv["cocoa_butter"], couv["sugar"], target_cb, target_sugar,
+            couv.get("milk_fat", 0.0),
+        )
 
     if result is None:
-        st.error("These targets do not work with this couverture. Try a lower cocoa butter target.")
+        st.error("These targets do not work with this couverture. Try different targets.")
     else:
+        if use_water:
+            st.metric("Extra cocoa butter", f"{round(result['extra_cb'], 1)} g")
         col1, col2 = st.columns(2)
         col1.metric("Couverture", f"{round(result['couverture'])} g")
         col2.metric("Total", f"{round(result['total'])} g")
