@@ -11,44 +11,61 @@ COUVERTURES = {
     "White (example)": {"cocoa_butter": 33},
 }
 
-# Callebaut technical sheets (per 100 g). Used by the ganache designer.
+# Callebaut technical sheets (per 100 g). Dark couvertures only for now.
 GANACHE_COUVERTURES = {
-    "Callebaut 70-30-38": {"cocoa_butter": 38.9, "sugar": 26.0, "type": "Dark"},
-    "Callebaut 811": {"cocoa_butter": 36.6, "sugar": 43.1, "type": "Dark"},
-    "Callebaut 823 milk": {"cocoa_butter": 36.2, "sugar": 49.9, "type": "Milk"},
+    "Callebaut 70-30-38": {"cocoa_butter": 38.9, "sugar": 26.0},
+    "Callebaut 811": {"cocoa_butter": 36.6, "sugar": 43.1},
 }
 LIQUIDS = {
     "Cream 35%": {"water": 65.0, "sugar": 0.0, "dairy_fat": 35.0},
     "Fruit puree (approx.)": {"water": 85.0, "sugar": 10.0, "dairy_fat": 0.0},
 }
-COCOA_BUTTER_TARGET = {"Dark": 22.0, "Milk": 28.0}
+
+# Added sugars, in the proportions of recipe 189 (weight ratio 1 : 2 : 2.5 : 2).
+# Each entry: share of the added weight, and the % of water in that ingredient.
+ADDED_SUGARS = {
+    "Glucose syrup": {"share": 1 / 7.5, "water": 20.0},
+    "Invert sugar": {"share": 2 / 7.5, "water": 20.0},
+    "Dextrose": {"share": 2.5 / 7.5, "water": 0.0},
+    "Sorbitol powder": {"share": 2 / 7.5, "water": 0.0},
+}
+SUGAR_PER_GRAM = sum(v["share"] * (100 - v["water"]) / 100 for v in ADDED_SUGARS.values())
+WATER_PER_GRAM = sum(v["share"] * v["water"] / 100 for v in ADDED_SUGARS.values())
 
 
 def new_couverture_weight(weight_a, factor_a, factor_b):
     return weight_a * factor_a / factor_b
 
 
-def design_ganache(liquid_g, water, sugar, dairy_fat, couv_cb, couv_sugar, target_cb):
-    """Smallest total weight where water<=20, sugars>=30, dairy fat<=15, butter<=15
-    and cocoa butter = target. Returns dict of grams or None."""
-    k = target_cb / couv_cb
-    if k >= 1 or liquid_g <= 0:
+def design_ganache(liquid_g, water, sugar, dairy_fat, couv_cb, couv_sugar, target_cb, target_sugar):
+    """Ganache with a target % of cocoa butter and of total sugars.
+    Returns grams of each ingredient and the resulting percentages, or None."""
+    if liquid_g <= 0 or couv_cb <= 0:
         return None
-    total = liquid_g
-    while total < liquid_g * 30:
-        couv = k * total
-        liquid_sugar = liquid_g * sugar / 100
-        need = 0.30 * total - liquid_sugar - couv * couv_sugar / 100
-        glucose = max(0.0, need / 0.8)
-        butter = total - liquid_g - couv - glucose
-        if butter >= -1e-9:
-            butter = max(butter, 0.0)
-            w = (liquid_g * water / 100 + glucose * 0.20) / total * 100
-            d = (liquid_g * dairy_fat / 100 + butter) / total * 100
-            if w <= 20 and d <= 15 and butter / total * 100 <= 15:
-                return {"couverture": couv, "glucose": glucose, "butter": butter, "total": total}
-        total += 0.5
-    return None
+    k = target_cb / couv_cb
+    s = target_sugar / 100
+    sc = couv_sugar / 100
+    sl = sugar / 100
+    if k >= 1:
+        return None
+    denominator = 1 - k - (s - sc * k) / SUGAR_PER_GRAM
+    total = liquid_g * (1 - sl / SUGAR_PER_GRAM) / denominator if denominator > 0 else -1
+    couverture = k * total
+    added = (s * total - sl * liquid_g - sc * couverture) / SUGAR_PER_GRAM
+    if total <= 0 or added < 0:
+        # Couverture and liquid already give enough sugar: no added sugars.
+        added = 0.0
+        total = liquid_g / (1 - k)
+        couverture = k * total
+    result = {"couverture": couverture, "total": liquid_g + couverture + added}
+    for name, info in ADDED_SUGARS.items():
+        result[name] = added * info["share"]
+    total = result["total"]
+    result["pct_water"] = (liquid_g * water / 100 + added * WATER_PER_GRAM) / total * 100
+    result["pct_sugar"] = (liquid_g * sugar / 100 + added * SUGAR_PER_GRAM + couverture * couv_sugar / 100) / total * 100
+    result["pct_cocoa_butter"] = couverture * couv_cb / 100 / total * 100
+    result["pct_dairy_fat"] = liquid_g * dairy_fat / 100 / total * 100
+    return result
 
 
 st.title("Chocolate Calculator")
@@ -117,28 +134,40 @@ with tab_ganache:
 
 with tab_design:
     st.header("Ganache designer")
-    st.caption("Balances a truffle ganache (cut with a guitar) using the limits in Ramon Morato's book.")
+    st.caption("For piped bonbon ganaches with dark couverture. Based on recipe 189 (811 ganache) and Ramon Morato's book.")
 
     liquid_name = st.selectbox("Liquid", list(LIQUIDS))
-    liquid_g = st.number_input("Grams of liquid", min_value=0.0, value=500.0, step=10.0)
-    couv_name = st.selectbox("Couverture", list(GANACHE_COUVERTURES), key="design_couverture")
+    liquid_g = st.number_input("Grams of liquid", min_value=0.0, value=190.5, step=10.0)
+    couv_name = st.selectbox("Couverture", list(GANACHE_COUVERTURES), index=1, key="design_couverture")
+    target_cb = st.number_input("Target cocoa butter (%)", min_value=5.0, max_value=30.0, value=16.3, step=0.5)
+    target_sugar = st.number_input("Target total sugars (%)", min_value=20.0, max_value=60.0, value=41.0, step=1.0)
 
     liquid = LIQUIDS[liquid_name]
     couv = GANACHE_COUVERTURES[couv_name]
-    target_cb = COCOA_BUTTER_TARGET[couv["type"]]
-    st.write(f"Cocoa butter target for a {couv['type'].lower()} ganache cut with a guitar: **{target_cb:.0f}%**")
 
     result = design_ganache(
         liquid_g, liquid["water"], liquid["sugar"], liquid["dairy_fat"],
-        couv["cocoa_butter"], couv["sugar"], target_cb,
+        couv["cocoa_butter"], couv["sugar"], target_cb, target_sugar,
     )
 
     if result is None:
-        st.error("No recipe fits all the book's limits with this liquid and couverture. Try another couverture.")
+        st.error("These targets do not work with this couverture. Try a lower cocoa butter target.")
     else:
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         col1.metric("Couverture", f"{round(result['couverture'])} g")
-        col2.metric("Glucose syrup", f"{round(result['glucose'])} g")
-        col3.metric("Anhydrous butter", f"{round(result['butter'])} g")
-        st.subheader(f"Total: {round(result['total'])} g")
-        st.info("Water max 20%, sugars min 30%, dairy fat max 15%. Measure the Aw to confirm it is below 0.85.")
+        col2.metric("Total", f"{round(result['total'])} g")
+        col1, col2 = st.columns(2)
+        col1.metric("Glucose syrup", f"{round(result['Glucose syrup'], 1)} g")
+        col2.metric("Invert sugar", f"{round(result['Invert sugar'], 1)} g")
+        col1, col2 = st.columns(2)
+        col1.metric("Dextrose", f"{round(result['Dextrose'], 1)} g")
+        col2.metric("Sorbitol powder", f"{round(result['Sorbitol powder'], 1)} g")
+
+        st.subheader("Result")
+        st.write(f"Water: **{result['pct_water']:.1f}%**")
+        st.write(f"Sugars: **{result['pct_sugar']:.1f}%**")
+        st.write(f"Cocoa butter: **{result['pct_cocoa_butter']:.1f}%**")
+        st.write(f"Dairy fat: **{result['pct_dairy_fat']:.1f}%**")
+        st.info("Recipe 189 has about 22% water, 41% sugars, 16% cocoa butter and 11% dairy fat. Measure the Aw to confirm it is below 0.85.")
+   
+   
